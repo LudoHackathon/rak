@@ -1,0 +1,8 @@
+# @package _global_
+task_name: fused
+
+model:
+  lm:
+    backbone:
+      _target_: hw.backbones.seqfirst_rnn.SeqFirstRNN
+      apply_contiguous: false
