@@ -1,0 +1,4 @@
+_target_: hw.data.DummyDataset
+vocab_size: ${vocab_size}
+seq_len: 1024   # default sequence length
+datasize: ???  # default size of the dataset
