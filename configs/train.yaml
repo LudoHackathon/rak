@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - model: base_model
+  - data: dummy
+  - experiment: null
+
+task_name: default_train
+train: true
+
+train_bs: 256    # train batch size
+val_bs: 2048     # val batch size
+
+vocab_size: 512  # default vocabulary size
+compile: false   # torch compilation
+
+data:
+  datasize: 2048  # train/val with a fix dataset
