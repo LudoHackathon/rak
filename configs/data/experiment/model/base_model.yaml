@@ -1,0 +1,13 @@
+_target_: hw.lit_model.LitLM
+vocab_size: ${vocab_size}
+lm:
+  _target_: hw.base_model.LM
+  vocab_size: ${vocab_size}
+  hidden_dim: 64
+  key_dim: 32
+  value_dim: 32
+  output_dim: 64
+  num_layers: 4
+  backbone:
+    _target_: hw.backbones.simple_rnn.SimpleRNN
+    _partial_: true
