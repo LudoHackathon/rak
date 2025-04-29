@@ -1,0 +1,17 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - model: base_model
+  - data: dummy
+  - experiment: null
+
+task_name: default_test
+train: false
+
+val_bs: 2048     # higher batch size in test
+vocab_size: 512  # default vocabulary size
+compile: false   # torch compilation
+
+data:
+  datasize: 65536  # inference mode with a larger dataset because it may run for ages once learnt
