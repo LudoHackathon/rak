@@ -1,0 +1,8 @@
+# @package _global_
+task_name: sequence_length_first
+
+model:
+  lm:
+    backbone:
+      _target_: hw.backbones.seqfirst_rnn.SeqFirstRNN
+      apply_contiguous: false
