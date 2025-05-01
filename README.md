@@ -11,6 +11,8 @@ rak
 │   ├── experiments             # directory containing the different backbones config files
 │   │   ├── fused_cont.yaml     # SimpleRNN + fused linear layer + transposed B, T + contiguous tensors
 │   │   ├── fused.yaml          # SimpleRNN + fused linear layer + transposed B, T 
+│   │   ├── kvout_cont.yaml     # SimpleRNN + fused linear layer + transposed B, T + KV computation outside of for loop + contiguous tensors
+│   │   ├── kvout.yaml          # SimpleRNN + fused linear layer + transposed B, T + KV computation outside of for loop
 │   │   ├── seqfirst_cont.yaml  # SimpleRNN + transposed B, T + contiguous tensors
 │   │   ├── seqfirst.yaml       # SimpleRNN + transposed B, T
 │   │   └── simple.yaml         # SimpleRNN
@@ -21,6 +23,7 @@ rak
 ├── hw                          # homework module
 │   ├── backbones
 │   │   ├── fused_rnn.py        # FusedRNN class
+│   │   ├── kvout_rnn.py        # KVOutRNN class
 │   │   ├── seqfirst_rnn.py     # SeqFirstRNN class
 │   │   └── simple-rnn.py       # SimpleRNN class
 │   ├── base_model.py           # LM module and BaseRNN parent class
@@ -51,6 +54,7 @@ pip install -r requirements.txt
 pip install .
 ```
 3. **Run your first test**
+
 First, to check the job config that your are about to run, use the hydra `-c` option:
 ```sh
 python ./hw/main.py -c job
@@ -100,7 +104,8 @@ RNN optimizations:
   - force contiguous tensor memory after rearrange
   - unique projection head (i.e. single Linear) followed by split
 
-> I actually saw that the initial code was bugged after thinking and started to dive into the optimizations I wanted to do w.r.t. the RNN architecture: I hope this was not out of the scope of the homework.
+> I actually saw that the initial code was bugged after thinking and started to dive into the optimizations I wanted to do w.r.t. the SimpleRNN architecture: I hope this was not out of the scope of the homework.
+> I added before hand another KVOutRNN class that could, at first, seem like a good option (getting the kv operation outside of the for loop). But you would still have a for loop and thus the kv operation overhead might be negligeable. Plus you would need to store a bigger matrix of size (T, B, key_dim, value_dim) which could be a bottleneck for large batch sizes.
 
 ### Benchmarking results
 
@@ -110,13 +115,13 @@ Bellow are the results of the different optimizations. The experiments have been
 |------------------------------------------------------|----------------------|--------------------|---------------------|
 | SimpleRNN (Original backbone)                        | 298.22               | 2.48               | 36.20               |
 | SeqFirstRNN (Sequence first)                         | 204.36               | 2.08               | 32.04               |
-| SeqFirstRNN  + Contiguous memory                      | 202.32               | 2.05               | 35.98               |
+| SeqFirstRNN  + Contiguous memory                     | 202.32               | 2.05               | 35.98               |
 | FusedRNN (Sequence first + Fused QKVG projection)    | 202.57               | 2.05               | 31.83               |
 | FusedRNN + Contiguous memory                         | 202.85               | 2.03               | 35.27               |
 
-Note that in this setting (noise due to the infra I use), we should have run those experiments several more times to draw strong conclusions.
+Note that in this setting (i.e. noise due to the infra I use), we should have run those experiments several more times to draw strong conclusions.
 
-You can try to reproce this table by running
+You can try to reproduce this table by running
 ```sh
 python ./hw/main.py -m experiment=simple,seqfirst,seqfirst_cont,fused,fused_cont
 python ./hw/main.py -cn test -m experiment=simple,seqfirst,seqfirst_cont,fused,fused_cont
@@ -137,22 +142,22 @@ Even if this benchmark would require further testing (more runs, CI, different h
 
 ### Model capabilities
 
-First, let's talk about there respective capabilities inherent to their architecture. RNN are trained to retain relevant signal through a state embedding to predict the next token (at least in the case of our SimpleRNN). To do so, they sequentially aggregate current signal to their current state. Note that there are different ways to aggregate it (e.g. RNN vs LSTM-gating).
+First, let's talk about their respective capabilities inherent to their architecture. RNN are trained to retain relevant signal through a state embedding to predict the next token (at least in the case of our SimpleRNN). To do so, they sequentially aggregate current signal to their current state. Note that there are different ways to aggregate it (e.g. RNN vs LSTM-gating).
 
-Thus "knowing" in advance which information to retain from the already seen sequence is a real challenge and is still an open problem as showcased in [RWKV](https://arxiv.org/abs/2305.13048) Appendix L.
+Thus "knowing" in advance which information to retain (a.k.a. long-term dependencies) from an already seen sequence is a real challenge and is still an open problem as showcased in [RWKV](https://arxiv.org/abs/2305.13048) Appendix L.
 
 Self-Attention does not suffer from such limitation since one have access to the "raw" initial sequence (i.e. all previous tokens) to predict the next one whereas RNNs have a aggregated version of the past.
 
-One could also argue that due to there more intuitive mecanism, attention mecanisms (token relations through attention scores) are more interpretable than RNN mecanisms (latent hidden state).
+One could also argue that, due to there more intuitive mecanism, attention mecanisms (token relations through attention scores) are more interpretable than RNN mecanisms (latent hidden state).
 
 ### Computation, memory and training
 
-One of the main advanges of RNNlike approaches is their computation efficiency (linear complexity) w.r.t. sequence length. They are also more memory efficient since they only need their current hidden state to predict the next token given the current one. This property make RNN quite suitable for streaming tasks or infinite-context tasks.
+One of the main advanges of RNN-like approaches is their computation efficiency (linear complexity) w.r.t. sequence length. They are also more memory efficient since they only need their current hidden state to predict the next token given the current one. This property make RNN quite suitable for streaming tasks or infinite-context tasks.
 
-On the other side, self-attention-based methods suffer from a quadratic complexity w.r.t. sequence length (both computational and memory due to the attention matrix), where one need to compute the all attention score matrix. Still, some improvements have been made to make them more computationally and memory effecient (KV-cache, Multi-head latent attention, ...) at inference and training. This downside of self-attention-based methods make them hardly compatible with infinite-context tasks. But this architecture make them easy to parallelize and scale (e.g. simple causal matrix on the attention scores while training). Plus, the absence of for-loop as in RNN enable them to trully benefit from model `torch.compile`.
+On the other side, self-attention-based methods suffer from a quadratic complexity w.r.t. the sequence length (both computational and memory due to the attention matrix), where one need to compute the all attention score matrix. Still, some improvements have been made to make them more computationally and memory effecient (KV-cache, Multi-head latent attention, ...) at inference and training. This downside of self-attention-based methods make them hardly compatible with infinite-context tasks. But this architecture make them easy to parallelize and scale (e.g. simple causal matrix on the attention scores while training). Plus, the absence of for-loop, such as the one in SimpleRNN, enable them to trully benefit from model `torch.compile`.
 > To convince yourself how ineficient compilation is for RNNs, I've added the compilation option to the config file. I didn't had the time to wait for the compilation to end, but if you're currious you can do it and ping me with the results :D
 
-In the previous, section we saw that it could be challenging for RNN to capture long-term dependency, it is even truer with vanilla RNNs that suffer from vanishing gradient at training time.
+In the previous section, we saw that it could be challenging for RNNs to capture long-term dependency, it is even truer with vanilla RNNs that suffer from vanishing gradient at training time.
 
 ### Is this the end of RNN-variants?
 
