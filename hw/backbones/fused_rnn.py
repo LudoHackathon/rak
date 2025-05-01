@@ -11,6 +11,7 @@ from base_model import BaseRNN
 class FusedRNN(BaseRNN):
     def __init__(self, hidden_dim: int, key_dim: int, value_dim: int, output_dim: int, apply_contiguous=False):
         super().__init__(hidden_dim, key_dim, value_dim, output_dim)
+        self.apply_contiguous = apply_contiguous
 
         self.qkvg_dims = [value_dim, key_dim, value_dim, key_dim] 
         self.qkvg_proj = nn.Linear(hidden_dim, sum(self.qkvg_dims))  # query, key, value, gate fused projection
