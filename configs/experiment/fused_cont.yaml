@@ -4,5 +4,5 @@ task_name: fused_contiguous
 model:
   lm:
     backbone:
-      _target_: hw.backbones.seqfirst_rnn.SeqFirstRNN
+      _target_: hw.backbones.fused_rnn.FusedRNN
       apply_contiguous: true
