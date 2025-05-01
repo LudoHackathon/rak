@@ -1,0 +1,8 @@
+# @package _global_
+task_name: kvout_cont
+
+model:
+  lm:
+    backbone:
+      _target_: hw.backbones.kvout_rnn.KVOutRNN
+      apply_contiguous: true
